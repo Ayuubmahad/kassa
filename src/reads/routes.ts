@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { pool } from "../db/pool.js";
 import { getAccountBalances } from "../ledger/balances.js";
 import { checkDrift } from "../audit/drift.js";
+import { getLastReport, runAudit } from "../audit/scheduler.js";
 
 const idParams = {
   type: "object",
@@ -96,6 +97,10 @@ export async function readRoutes(app: FastifyInstance): Promise<void> {
 
   // Independent drift/reconciliation report (handy for the demo + post-load checks).
   app.get("/audit/drift", async () => checkDrift());
+
+  // Latest scheduled audit (ledger invariant + refund matching); runs on demand
+  // if the periodic job hasn't fired yet.
+  app.get("/audit/status", async () => getLastReport() ?? runAudit());
 
   // Derived account balances (from raw entries).
   app.get("/ledger/accounts", async () => {

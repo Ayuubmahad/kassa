@@ -13,6 +13,8 @@ const EnvSchema = z.object({
     .default("info"),
   DATABASE_URL: z.string().url(),
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  // How often the background audit re-sums the ledger. Default 24h ("nightly").
+  AUDIT_INTERVAL_MS: z.coerce.number().int().positive().default(86_400_000),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

@@ -15,6 +15,7 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:reset": "tsx src/db/reset.ts",
     "audit:drift": "tsx src/audit/driftCli.ts",
+    "audit:refunds": "tsx src/audit/refundsCli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
