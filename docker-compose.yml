@@ -1,0 +1,36 @@
+# One-command local stack: `docker compose up`
+# Brings up Postgres + the Kassa app. Interviewer's fastest path to trusting the work.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: kassa
+      POSTGRES_PASSWORD: kassa
+      POSTGRES_DB: kassa
+    ports:
+      - "5432:5432"
+    volumes:
+      - kassa_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kassa -d kassa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://kassa:kassa@db:5432/kassa
+    ports:
+      - "3000:3000"
+    # Apply schema, then start the server.
+    command: sh -c "npx tsx src/db/migrate.ts || node dist/db/migrate.js; node dist/server.js"
+
+volumes:
+  kassa_pgdata:
