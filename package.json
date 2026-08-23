@@ -13,6 +13,7 @@
     "start": "node dist/server.js",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
+    "db:reset": "tsx src/db/reset.ts",
     "audit:drift": "tsx src/audit/driftCli.ts",
     "test": "vitest run",
     "test:watch": "vitest",

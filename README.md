@@ -25,23 +25,34 @@ Core building blocks shipped so far:
 | Single-client transaction helper (the node-postgres way) | [`src/db/pool.ts`](src/db/pool.ts) |
 | The ledger-invariant test (project's first test) | [`test/ledger-invariant.test.ts`](test/ledger-invariant.test.ts) |
 
-## Headline metrics (to be filled with real numbers)
+## Headline metrics (measured — see [docs/LOAD-TESTING.md](docs/LOAD-TESTING.md))
 
-1. **0 balance drift** across 10,000 concurrent transactions — _pending Week 4_
-2. **p95 API latency < 150ms** under that load — _pending Week 4_
-3. **100% refund-to-payment matching** in audit replay — _pending Week 5_
-4. **Idempotency proven:** same checkout ×100 → exactly 1 charge — _pending Week 3_
+Load via **k6 over real HTTP**; app compiled, Postgres 16 in Docker; i7-10810U / 17 GB.
+
+1. **0 balance drift** — an independent checker re-sums the whole ledger + reconciles it to the
+   business tables after every load scenario and reports `ok`.
+2. **p95 = 26.88 ms** at ~200 req/s sustained, **0.00% errors** (mixed checkout storm).
+3. **No oversell:** 200 buyers vs stock 100 → exactly 100 succeed, inventory never negative.
+4. **No over-refund:** 200 concurrent refunds vs a 100000 payment → refunded sum = 100000 exactly.
+5. **Idempotency proven:** 100 concurrent requests sharing one key → exactly **1 charge**.
 
 ## Technical decisions & trade-offs
 
 - **Money is integer minor units (öre), never floats.** Floats silently lose cents; a payments core can't. Stored as `BIGINT`.
 - **Balances are derived, not stored.** A mutable balance you can't recompute is drift you can't detect. A nightly invariant job (Week 5) re-sums everything.
 - **Transactions use one checked-out client**, not `pool.query`, because node-postgres routes each `pool.query` to a possibly-different client — which would corrupt a multi-statement transaction. See `withTransaction`.
-- _(isolation level + locking choice — documented in Week 4.)_
+- **READ COMMITTED + explicit `FOR UPDATE`**, not SERIALIZABLE. Row locks give deterministic contention handling (proven by the no-oversell / no-over-refund load tests) with far fewer aborts than SERIALIZABLE's predicate-lock retries. I choose the lock points explicitly and document them.
+- **Consistent lock ordering** (`ORDER BY sku` before `FOR UPDATE`) plus a **deadlock/serialization retry** (`withTransactionRetry`, retries SQLSTATE 40001/40P01 with jittered backoff) as the safety net — the mixed storm ran at 0.00% failures.
 
 ## Where it failed and what I learned
 
-_(written the same day each bug happens — Weeks 4–6.)_
+**The 5-second p95.** My first throughput run measured **p95 = 5.16 s** with ~2500 dropped
+requests. Every checkout was buying the *same* SKU, so every transaction locked the *same*
+inventory row (`FOR UPDATE`) and they all serialized on it — my benchmark had accidentally
+recreated single-row contention. Real traffic spreads across many products, so I seeded a
+500-SKU catalog and randomised the buys: **p95 dropped to 26.88 ms (~190×)**. A throughput
+test has to model realistic key distribution or it just measures your worst lock. Full write-up
+in [docs/LOAD-TESTING.md](docs/LOAD-TESTING.md).
 
 ---
 

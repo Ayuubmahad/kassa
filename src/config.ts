@@ -12,6 +12,7 @@ const EnvSchema = z.object({
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
   DATABASE_URL: z.string().url(),
+  DB_POOL_MAX: z.coerce.number().int().positive().default(10),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
