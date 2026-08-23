@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { pool } from "./db/pool.js";
 import { checkoutRoutes } from "./checkout/routes.js";
 import { refundRoutes } from "./refunds/routes.js";
+import { readRoutes } from "./reads/routes.js";
 
 // Build the app separately from starting it, so tests can import the instance
 // without binding a port.
@@ -37,6 +38,7 @@ export function buildApp(): FastifyInstance {
 
   void app.register(checkoutRoutes);
   void app.register(refundRoutes);
+  void app.register(readRoutes);
 
   return app;
 }

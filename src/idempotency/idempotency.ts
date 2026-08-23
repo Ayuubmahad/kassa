@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { withTransaction, type Tx } from "../db/pool.js";
+import { withTransactionRetry, type Tx } from "../db/pool.js";
 
 export class IdempotencyKeyReuseError extends Error {
   constructor() {
@@ -54,7 +54,7 @@ export async function runIdempotent(
 ): Promise<IdempotentOutcome & { replayed: boolean }> {
   const requestHash = hashRequest(params.body);
 
-  return withTransaction(async (tx) => {
+  return withTransactionRetry(async (tx) => {
     const inserted = await tx.query(
       `INSERT INTO idempotency_keys (key, endpoint, request_hash)
        VALUES ($1, $2, $3)
