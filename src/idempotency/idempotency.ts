@@ -43,8 +43,11 @@ function stableStringify(value: unknown): string {
  *   - A concurrent request with the same key runs the same INSERT and BLOCKS on
  *     that lock until we commit. It then sees 0 rows inserted (conflict), reads
  *     our stored response, and replays it — the work never runs twice.
- *   - Same key + different body ⇒ reuse error. Row exists but response not yet
- *     stored (leader rolled back / crashed mid-flight) ⇒ in-progress error.
+ *   - Same key + different body ⇒ reuse error. The in-progress guard (an existing
+ *     row whose response is still NULL) is defensive: in this single-transaction
+ *     design a committed key always carries its response, so that state is
+ *     effectively unreachable today — it's kept for a future async/multi-step flow
+ *     where the key could be committed before the work finishes.
  *
  * Returns the outcome plus whether it was a replay of a prior response.
  */

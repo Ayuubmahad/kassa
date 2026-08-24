@@ -1,8 +1,10 @@
 import type { Tx } from "../db/pool.js";
+import { config } from "../config.js";
 import { postEntries } from "../ledger/postEntries.js";
 import {
   InsufficientInventoryError,
   UnknownSkuError,
+  UnsupportedCurrencyError,
 } from "./errors.js";
 
 export interface CheckoutItem {
@@ -49,7 +51,12 @@ export async function checkout(
   tx: Tx,
   input: CheckoutInput,
 ): Promise<CheckoutResult> {
-  const currency = input.currency ?? "SEK";
+  const currency = input.currency ?? config.BASE_CURRENCY;
+  // Single-currency by design: reject anything else so no foreign-currency leg
+  // can ever be posted against the base-currency accounts.
+  if (currency !== config.BASE_CURRENCY) {
+    throw new UnsupportedCurrencyError(currency, config.BASE_CURRENCY);
+  }
 
   // 0. Aggregate requested quantity per SKU BEFORE any validation or decrement.
   //    A SKU can legitimately appear in multiple line items; if we validated and

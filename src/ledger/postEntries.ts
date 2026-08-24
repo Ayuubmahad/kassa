@@ -5,7 +5,11 @@ export type Direction = "debit" | "credit";
 export interface LedgerLeg {
   accountId: number;
   direction: Direction;
-  /** Minor units (öre/cents). Must be a positive integer. */
+  /**
+   * Minor units (öre/cents). Must be a positive integer. Carried as a JS number,
+   * so exact only up to Number.MAX_SAFE_INTEGER (2^53) per leg; the balance
+   * checks below use BigInt. Safe within API input bounds (≤100 items × ≤10000 qty).
+   */
   amount: number;
   currency?: string;
 }

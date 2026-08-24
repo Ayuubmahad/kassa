@@ -21,3 +21,9 @@ export class InsufficientInventoryError extends CheckoutError {
     );
   }
 }
+
+export class UnsupportedCurrencyError extends CheckoutError {
+  constructor(requested: string, supported: string) {
+    super(`Currency ${requested} is not supported; this system operates in ${supported} only.`);
+  }
+}

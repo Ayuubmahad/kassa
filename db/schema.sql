@@ -140,3 +140,24 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (key, endpoint)
 );
+CREATE INDEX IF NOT EXISTS idx_idempotency_created ON idempotency_keys(created_at);
+
+-- ---------------------------------------------------------------------------
+-- Append-only enforcement (defense in depth). Application code only ever INSERTs
+-- into the ledger, but nothing structural stopped a future code path from
+-- UPDATE/DELETE-ing it. These triggers make mutation impossible at the DB level.
+-- Note: row-level DELETE triggers do NOT fire on TRUNCATE, so test resets still work.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION kassa_forbid_mutation() RETURNS trigger AS $$
+BEGIN
+  RAISE EXCEPTION 'ledger is append-only: % on % is not allowed', TG_OP, TG_TABLE_NAME;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER trg_ledger_entries_append_only
+  BEFORE UPDATE OR DELETE ON ledger_entries
+  FOR EACH ROW EXECUTE FUNCTION kassa_forbid_mutation();
+
+CREATE OR REPLACE TRIGGER trg_ledger_transactions_append_only
+  BEFORE UPDATE OR DELETE ON ledger_transactions
+  FOR EACH ROW EXECUTE FUNCTION kassa_forbid_mutation();

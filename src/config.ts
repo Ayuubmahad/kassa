@@ -15,6 +15,9 @@ const EnvSchema = z.object({
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
   // How often the background audit re-sums the ledger. Default 24h ("nightly").
   AUDIT_INTERVAL_MS: z.coerce.number().int().positive().default(86_400_000),
+  // Kassa is single-currency by design. Requests in any other currency are
+  // rejected so foreign-currency legs can never enter the (base-currency) accounts.
+  BASE_CURRENCY: z.string().length(3).default("SEK"),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

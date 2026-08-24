@@ -208,4 +208,18 @@ describe("POST /checkout", () => {
     expect(totals.debit).toBe("49500");
     expect(totals.credit).toBe("49500");
   });
+
+  it("rejects a non-base currency (422) so foreign legs can't enter SEK accounts", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/checkout",
+      headers: { "idempotency-key": "usd-checkout" },
+      payload: { customerRef: "cust-usd", currency: "USD", items: [{ sku: "SKU-MUG", quantity: 1 }] },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toBe("UnsupportedCurrencyError");
+    // Nothing written.
+    const orders = await pool.query(`SELECT count(*)::int AS n FROM orders`);
+    expect(orders.rows[0].n).toBe(0);
+  });
 });
