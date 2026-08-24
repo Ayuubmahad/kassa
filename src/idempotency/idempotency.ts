@@ -1,5 +1,19 @@
 import { createHash } from "node:crypto";
-import { withTransactionRetry, type Tx } from "../db/pool.js";
+import { withTransactionRetry, pool, type Tx } from "../db/pool.js";
+
+/**
+ * Delete idempotency keys older than `olderThanMs`. Called periodically so the
+ * table can't grow without bound. Keys are only useful for the retry window of
+ * the original request, so anything beyond the TTL is safe to prune. Returns the
+ * number of rows removed.
+ */
+export async function deleteExpiredIdempotencyKeys(olderThanMs: number): Promise<number> {
+  const res = await pool.query(
+    `DELETE FROM idempotency_keys WHERE created_at < now() - ($1::double precision * interval '1 millisecond')`,
+    [olderThanMs],
+  );
+  return res.rowCount ?? 0;
+}
 
 export class IdempotencyKeyReuseError extends Error {
   constructor() {

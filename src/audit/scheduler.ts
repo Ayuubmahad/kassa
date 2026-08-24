@@ -1,6 +1,8 @@
 import { checkDrift, type DriftReport } from "./drift.js";
 import { matchRefunds, type RefundMatchReport } from "./refundMatching.js";
+import { deleteExpiredIdempotencyKeys } from "../idempotency/idempotency.js";
 import { pool } from "../db/pool.js";
+import { config } from "../config.js";
 
 export interface AuditReport {
   at: string;
@@ -48,6 +50,10 @@ export function startAuditScheduler(
       .catch(() => {
         /* audit failures shouldn't crash the server; next tick retries */
       });
+    // Maintenance: prune expired idempotency keys so the table can't grow forever.
+    deleteExpiredIdempotencyKeys(config.IDEMPOTENCY_TTL_MS).catch(() => {
+      /* best-effort cleanup; retried next tick */
+    });
   };
   tick();
   timer = setInterval(tick, intervalMs);

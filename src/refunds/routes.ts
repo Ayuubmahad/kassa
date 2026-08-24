@@ -9,6 +9,7 @@ import {
   IdempotencyKeyReuseError,
   IdempotencyInProgressError,
 } from "../idempotency/idempotency.js";
+import { isSerializationError } from "../db/pool.js";
 
 const paramsSchema = {
   type: "object",
@@ -66,6 +67,10 @@ export async function refundRoutes(app: FastifyInstance): Promise<void> {
         }
         if (err instanceof IdempotencyInProgressError) {
           return reply.code(409).send({ error: err.name, message: err.message });
+        }
+        if (isSerializationError(err)) {
+          reply.header("retry-after", "1");
+          return reply.code(503).send({ error: "TooMuchContention", message: "Please retry." });
         }
         throw err;
       }

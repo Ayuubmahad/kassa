@@ -21,6 +21,9 @@ const EnvSchema = z.object({
   // Rate limiting for the public demo (per IP).
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
+  // Idempotency keys are pruned once older than this (default 72h). The audit
+  // scheduler runs the cleanup so the table can't grow forever.
+  IDEMPOTENCY_TTL_MS: z.coerce.number().int().positive().default(259_200_000),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

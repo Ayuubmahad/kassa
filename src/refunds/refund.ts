@@ -25,6 +25,7 @@ export interface RefundResult {
 
 interface PaymentRow {
   id: string;
+  order_id: string;
   amount: string; // BIGINT -> string
   currency: string;
   status: string;
@@ -46,7 +47,7 @@ const REFUNDABLE = new Set(["succeeded", "partially_refunded"]);
  */
 export async function refund(tx: Tx, input: RefundInput): Promise<RefundResult> {
   const paymentRes = await tx.query<PaymentRow>(
-    `SELECT id, amount, currency, status FROM payments WHERE id = $1 FOR UPDATE`,
+    `SELECT id, order_id, amount, currency, status FROM payments WHERE id = $1 FOR UPDATE`,
     [input.paymentId],
   );
   const payment = paymentRes.rows[0];
@@ -101,6 +102,13 @@ export async function refund(tx: Tx, input: RefundInput): Promise<RefundResult> 
     paymentStatus,
     input.paymentId,
   ]);
+  // Keep the order in sync: a fully-refunded payment marks its order refunded.
+  if (paymentStatus === "refunded") {
+    await tx.query(
+      `UPDATE orders SET status = 'refunded', updated_at = now() WHERE id = $1`,
+      [payment.order_id],
+    );
+  }
 
   return {
     refundId,

@@ -6,6 +6,7 @@ import {
   IdempotencyKeyReuseError,
   IdempotencyInProgressError,
 } from "../idempotency/idempotency.js";
+import { isSerializationError } from "../db/pool.js";
 
 // Fastify v5 requires a full JSON schema (with `type`) for body/params/query.
 // This both validates+sanitises input (security) and documents the endpoint.
@@ -69,6 +70,11 @@ export async function checkoutRoutes(app: FastifyInstance): Promise<void> {
         }
         if (err instanceof IdempotencyInProgressError) {
           return reply.code(409).send({ error: err.name, message: err.message });
+        }
+        if (isSerializationError(err)) {
+          // Retries were exhausted under heavy contention — ask the client to retry.
+          reply.header("retry-after", "1");
+          return reply.code(503).send({ error: "TooMuchContention", message: "Please retry." });
         }
         throw err; // real failure → Fastify's 500 handler, logged with the req id
       }

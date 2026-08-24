@@ -46,6 +46,12 @@ export async function withTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T>
 //   40001 = serialization_failure, 40P01 = deadlock_detected
 const RETRYABLE_SQLSTATES = new Set(["40001", "40P01"]);
 
+/** True if the error is a serialization failure / deadlock (SQLSTATE 40001/40P01). */
+export function isSerializationError(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  return code === "40001" || code === "40P01";
+}
+
 /**
  * Like withTransaction, but retries the WHOLE transaction on deadlock /
  * serialization failure with jittered exponential backoff. Under concurrent load
