@@ -29,8 +29,11 @@ services:
       DATABASE_URL: postgres://kassa:kassa@db:5432/kassa
     ports:
       - "3000:3000"
-    # Apply schema, then start the server.
-    command: sh -c "npx tsx src/db/migrate.ts || node dist/db/migrate.js; node dist/server.js"
+    # Apply schema (compiled migrate), then start the server — only if it succeeds.
+    # The runtime image ships only dist/ + db/ and installs prod deps (`npm ci
+    # --omit=dev`), so tsx isn't present; `npx tsx` would trigger a network fetch
+    # at container start. Run the compiled JS instead.
+    command: sh -c "node dist/db/migrate.js && node dist/server.js"
 
 volumes:
   kassa_pgdata:

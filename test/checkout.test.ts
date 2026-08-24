@@ -138,4 +138,74 @@ describe("POST /checkout", () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  // Duplicate SKUs across line items must be summed, not processed per-line.
+  it("duplicate SKU exceeding stock → 422, nothing written (atomic)", async () => {
+    // SKU-MUG has 50 in stock. Two lines of 30 each = 60 > 50. Each line passes
+    // an individual check, but the summed demand exceeds stock, so the whole
+    // order must be rejected with nothing persisted.
+    const res = await app.inject({
+      method: "POST",
+      url: "/checkout",
+      headers: { "idempotency-key": "dup-over-stock" },
+      payload: {
+        customerRef: "cust-dup-over",
+        items: [
+          { sku: "SKU-MUG", quantity: 30 },
+          { sku: "SKU-MUG", quantity: 30 },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error).toBe("InsufficientInventoryError");
+
+    // Nothing written: no order, inventory intact, ledger empty.
+    const orders = await pool.query(`SELECT count(*)::int AS n FROM orders`);
+    expect(orders.rows[0].n).toBe(0);
+    const mug = await pool.query(`SELECT available_qty FROM inventory WHERE sku = 'SKU-MUG'`);
+    expect(mug.rows[0].available_qty).toBe(50);
+    const entries = await pool.query(`SELECT count(*)::int AS n FROM ledger_entries`);
+    expect(entries.rows[0].n).toBe(0);
+  });
+
+  it("duplicate SKU within stock → 201, decremented by summed qty, ledger balanced", async () => {
+    // Two lines of the same SKU (2 + 3 = 5 mugs) → one order_item, one decrement.
+    const res = await app.inject({
+      method: "POST",
+      url: "/checkout",
+      headers: { "idempotency-key": "dup-within-stock" },
+      payload: {
+        customerRef: "cust-dup-within",
+        items: [
+          { sku: "SKU-MUG", quantity: 2 },
+          { sku: "SKU-MUG", quantity: 3 },
+        ],
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    const body = res.json();
+    expect(body.totalAmount).toBe(49500); // 5 * 9900
+
+    // Inventory decremented by exactly the summed quantity.
+    const mug = await pool.query(`SELECT available_qty FROM inventory WHERE sku = 'SKU-MUG'`);
+    expect(mug.rows[0].available_qty).toBe(45); // 50 - (2 + 3)
+
+    // Exactly one order_item for the SKU, carrying the summed quantity.
+    const items = await pool.query<{ quantity: number }>(
+      `SELECT quantity FROM order_items WHERE order_id = $1`,
+      [body.orderId],
+    );
+    expect(items.rows.length).toBe(1);
+    expect(items.rows[0].quantity).toBe(5);
+
+    // Ledger balances for this transaction.
+    const legs = await pool.query<{ direction: string; total: string }>(
+      `SELECT direction, SUM(amount)::text AS total FROM ledger_entries
+       WHERE transaction_id = $1 GROUP BY direction`,
+      [body.ledgerTransactionId],
+    );
+    const totals = Object.fromEntries(legs.rows.map((r) => [r.direction, r.total]));
+    expect(totals.debit).toBe("49500");
+    expect(totals.credit).toBe("49500");
+  });
 });

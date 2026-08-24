@@ -50,32 +50,41 @@ export async function checkout(
   input: CheckoutInput,
 ): Promise<CheckoutResult> {
   const currency = input.currency ?? "SEK";
-  const skus = input.items.map((i) => i.sku);
 
-  // 1. Lock inventory rows in a deterministic order.
+  // 0. Aggregate requested quantity per SKU BEFORE any validation or decrement.
+  //    A SKU can legitimately appear in multiple line items; if we validated and
+  //    decremented per-line, each line's stock check could pass on its own while
+  //    the *summed* demand exceeds stock, and the two decrements would then drive
+  //    available_qty negative (CHECK available_qty >= 0 → 23514 → 500). Summing
+  //    up front makes the check see true demand and lets us decrement exactly once
+  //    per distinct SKU. Sorted for a deterministic order that matches the lock.
+  const qtyBySku = new Map<string, number>();
+  for (const item of input.items) {
+    qtyBySku.set(item.sku, (qtyBySku.get(item.sku) ?? 0) + item.quantity);
+  }
+  const orderedSkus = [...qtyBySku.keys()].sort();
+
+  // 1. Lock inventory rows in a deterministic order (by sku) to avoid deadlocks.
   const invRes = await tx.query<InventoryRow>(
     `SELECT sku, unit_price, available_qty
      FROM inventory
      WHERE sku = ANY($1::text[])
      ORDER BY sku
      FOR UPDATE`,
-    [skus],
+    [orderedSkus],
   );
   const bySku = new Map(invRes.rows.map((r) => [r.sku, r]));
 
-  // 2. Validate + 4a. compute total.
+  // 2. Validate every DISTINCT sku against its SUMMED quantity + compute total.
   let totalAmount = 0n;
-  for (const item of input.items) {
-    const row = bySku.get(item.sku);
-    if (!row) throw new UnknownSkuError(item.sku);
-    if (row.available_qty < item.quantity) {
-      throw new InsufficientInventoryError(
-        item.sku,
-        item.quantity,
-        row.available_qty,
-      );
+  for (const sku of orderedSkus) {
+    const quantity = qtyBySku.get(sku)!;
+    const row = bySku.get(sku);
+    if (!row) throw new UnknownSkuError(sku);
+    if (row.available_qty < quantity) {
+      throw new InsufficientInventoryError(sku, quantity, row.available_qty);
     }
-    totalAmount += BigInt(row.unit_price) * BigInt(item.quantity);
+    totalAmount += BigInt(row.unit_price) * BigInt(quantity);
   }
 
   // 3. Create the order.
@@ -87,18 +96,20 @@ export async function checkout(
   );
   const orderId = Number(orderRes.rows[0]!.id);
 
-  // 3b + 4. Order items + inventory decrement.
-  for (const item of input.items) {
-    const row = bySku.get(item.sku)!;
+  // 3b + 4. One order_item per DISTINCT sku + a single decrement per sku
+  //         (using the summed quantity), so duplicate lines can't double-decrement.
+  for (const sku of orderedSkus) {
+    const quantity = qtyBySku.get(sku)!;
+    const row = bySku.get(sku)!;
     await tx.query(
       `INSERT INTO order_items (order_id, sku, quantity, unit_price)
        VALUES ($1, $2, $3, $4)`,
-      [orderId, item.sku, item.quantity, row.unit_price],
+      [orderId, sku, quantity, row.unit_price],
     );
     await tx.query(
       `UPDATE inventory SET available_qty = available_qty - $1, updated_at = now()
        WHERE sku = $2`,
-      [item.quantity, item.sku],
+      [quantity, sku],
     );
   }
 
