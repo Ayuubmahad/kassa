@@ -12,6 +12,12 @@ const EnvSchema = z.object({
     .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
     .default("info"),
   DATABASE_URL: z.string().url(),
+  // Managed Postgres (Render/Fly/Supabase) usually requires TLS. Set DB_SSL=true
+  // there; leave false for the local docker Postgres.
+  DB_SSL: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
   // How often the background audit re-sums the ledger. Default 24h ("nightly").
   AUDIT_INTERVAL_MS: z.coerce.number().int().positive().default(86_400_000),

@@ -1,0 +1,33 @@
+# Fly.io config. Deploy steps:
+#   fly launch --no-deploy          # creates the app (accept this fly.toml)
+#   fly postgres create             # provision Postgres, then attach it:
+#   fly postgres attach <db-name>   # sets the DATABASE_URL secret
+#   fly secrets set DB_SSL=true
+#   fly deploy
+# The release_command runs the migration once before each deploy goes live.
+app = "kassa"
+primary_region = "arn"  # Stockholm
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  release_command = "node dist/db/migrate.js"
+
+[env]
+  NODE_ENV = "production"
+  HOST = "0.0.0.0"
+  PORT = "3000"
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "15s"
+    timeout = "3s"

@@ -1,0 +1,27 @@
+# Render Blueprint — one-click deploy of the app + a managed Postgres.
+# In the Render dashboard: New → Blueprint → point at this repo.
+# Note (roadmap reality, 2026): the free web plan cold-starts after ~15 min idle
+# (30–60s first request) and free Postgres expires after 90 days. Upgrade the web
+# service to a paid instance for always-on during application season.
+services:
+  - type: web
+    name: kassa
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    # Apply the schema, then serve (tsx isn't in the prod image, so run compiled JS).
+    dockerCommand: sh -c "node dist/db/migrate.js && node dist/server.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_SSL
+        value: "true"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kassa-db
+          property: connectionString
+
+databases:
+  - name: kassa-db
+    plan: free
+    postgresMajorVersion: "16"

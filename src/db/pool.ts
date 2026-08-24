@@ -5,6 +5,10 @@ const { Pool } = pg;
 
 export const pool = new Pool({
   connectionString: config.DATABASE_URL,
+  // Managed Postgres terminates TLS with certs node doesn't have in its trust
+  // store; rejectUnauthorized:false accepts the provider's cert (the connection
+  // is still encrypted). Off entirely for local docker Postgres.
+  ssl: config.DB_SSL ? { rejectUnauthorized: false } : false,
   max: config.DB_POOL_MAX,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
