@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Kassa — a transaction-safe payments core with a double-entry ledger, idempotent APIs, and provable correctness under concurrent load (TypeScript, Fastify, PostgreSQL).">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kassa Payments Core">
+<meta property="og:description" content="A double-entry payments backend proven correct under concurrent load: 0 balance drift, p95 27ms, no oversell, exactly-once charges.">
+<title>Kassa Payments Core</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --ground:   #F3F5F4;
+    --surface:  #FFFFFF;
+    --surface-2:#EAEEEC;
+    --ink:      #13201C;
+    --muted:    #566862;
+    --line:     #D8E0DC;
+    --accent:   #0B7A67;
+    --accent-soft:#0b7a6714;
+    --on-accent:#FFFFFF;
+    --amber:    #9A5B16;
+    --shadow:   0 1px 2px rgba(16,32,28,.05), 0 8px 30px rgba(16,32,28,.06);
+
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+    --display: "Familjen Grotesk", "Hanken Grotesk", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:   #0B1310;
+      --surface:  #101A16;
+      --surface-2:#15221D;
+      --ink:      #E8EFEB;
+      --muted:    #8AA098;
+      --line:     #22322C;
+      --accent:   #38D6B2;
+      --accent-soft:#38d6b21f;
+      --on-accent:#04130E;
+      --amber:    #E0A75E;
+      --shadow:   0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:   #0B1310;
+    --surface:  #101A16;
+    --surface-2:#15221D;
+    --ink:      #E8EFEB;
+    --muted:    #8AA098;
+    --line:     #22322C;
+    --accent:   #38D6B2;
+    --accent-soft:#38d6b21f;
+    --on-accent:#04130E;
+    --amber:    #E0A75E;
+    --shadow:   0 1px 2px rgba(0,0,0,.3), 0 10px 34px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
+  h1, h2, h3 { font-family: var(--display); font-weight: 600; text-wrap: balance; margin: 0; letter-spacing: -.01em; }
+  a { color: var(--accent); text-decoration: none; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 14px; font-weight: 500;
+  }
+  .lead { color: var(--muted); font-size: 19px; max-width: 60ch; }
+
+  /* ---------- header ---------- */
+  header.top { padding: 22px 0; }
+  .top-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .brand { display: flex; align-items: center; gap: 11px; font-family: var(--display); font-weight: 600; font-size: 18px; letter-spacing: -.01em; }
+  .brand .mark {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--accent); color: var(--on-accent);
+    display: grid; place-items: center; font-family: var(--mono); font-weight: 600; font-size: 15px;
+  }
+  .top-links { display: flex; gap: 22px; font-size: 14px; }
+  .top-links a { color: var(--muted); }
+  .top-links a:hover { color: var(--ink); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 60px 0 76px; border-top: none; }
+  .hero-grid { display: grid; grid-template-columns: 1.15fr .85fr; gap: 56px; align-items: center; }
+  .hero h1 { font-size: clamp(38px, 6vw, 62px); line-height: 1.02; font-weight: 700; }
+  .hero h1 .thin { color: var(--muted); font-weight: 500; }
+  .hero .lead { margin-top: 22px; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 9px; padding: 12px 20px; border-radius: 10px;
+    font-family: var(--display); font-weight: 600; font-size: 15px; border: 1px solid transparent; cursor: pointer;
+  }
+  .btn-primary { background: var(--accent); color: var(--on-accent); }
+  .btn-primary:hover { filter: brightness(1.06); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ledger balance visual */
+  .ledger {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 26px 24px 22px;
+    box-shadow: var(--shadow);
+  }
+  .ledger-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 18px; }
+  .ledger-head .t { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .ledger-head .ref { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .col-label { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .bar-track { height: 108px; background: var(--surface-2); border-radius: 8px; position: relative; overflow: hidden; }
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: var(--accent); border-radius: 8px 8px 0 0; transition: height 1.1s cubic-bezier(.22,1,.36,1); }
+  .bar.credit { background: color-mix(in srgb, var(--accent) 62%, var(--surface)); }
+  .bar-val { position: absolute; left: 0; right: 0; top: 10px; text-align: center; font-family: var(--mono); font-weight: 600; font-size: 15px; color: var(--on-accent); mix-blend-mode: normal; }
+  .invariant { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); display: flex; align-items: center; justify-content: center; gap: 12px; font-family: var(--mono); font-size: 15px; }
+  .invariant .ok { color: var(--accent); font-weight: 600; }
+  .invariant .chip { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+
+  /* ---------- pillars ---------- */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 8px; }
+  .pillar { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 24px; box-shadow: var(--shadow); }
+  .pillar h3 { font-size: 18px; margin-bottom: 8px; }
+  .pillar p { margin: 0; color: var(--muted); font-size: 15px; }
+  .pillar .n { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: .1em; }
+
+  /* ---------- metrics ---------- */
+  .sec-head { max-width: 62ch; margin-bottom: 40px; }
+  .sec-head h2 { font-size: clamp(26px, 3.4vw, 34px); }
+  .sec-head p { color: var(--muted); margin: 14px 0 0; }
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .metric { background: var(--surface); padding: 26px 22px; }
+  .metric .fig { font-family: var(--mono); font-weight: 600; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; line-height: 1; }
+  .metric .fig .u { font-size: 18px; color: var(--muted); }
+  .metric .k { margin-top: 12px; font-size: 14px; color: var(--muted); }
+  .metric .k b { color: var(--ink); font-weight: 600; }
+
+  /* ---------- war story ---------- */
+  .war { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  .beforeafter { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 28px; box-shadow: var(--shadow); }
+  .ba-row { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 16px; padding: 14px 0; }
+  .ba-row + .ba-row { border-top: 1px solid var(--line); }
+  .ba-tag { font-family: var(--mono); font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .ba-num { font-family: var(--mono); font-weight: 600; font-size: 30px; letter-spacing: -.02em; }
+  .ba-num.bad { color: var(--amber); }
+  .ba-num.good { color: var(--accent); }
+  .ba-meter { height: 8px; border-radius: 999px; background: var(--surface-2); margin-top: 10px; overflow: hidden; }
+  .ba-meter i { display: block; height: 100%; border-radius: 999px; }
+  .delta { margin-top: 20px; font-family: var(--mono); font-size: 13px; color: var(--muted); text-align: center; }
+  .delta b { color: var(--accent); }
+
+  /* ---------- flow ---------- */
+  .flow { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+  .step { display: grid; grid-template-columns: 44px 1fr; gap: 18px; }
+  .step .rail { display: flex; flex-direction: column; align-items: center; }
+  .step .dot { width: 30px; height: 30px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); display: grid; place-items: center; font-family: var(--mono); font-size: 13px; color: var(--accent); font-weight: 600; flex: none; }
+  .step.key .dot { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .step .line { width: 1px; flex: 1; background: var(--line); margin: 4px 0; }
+  .step:last-child .line { display: none; }
+  .step .body { padding-bottom: 26px; }
+  .step .body h3 { font-size: 16px; }
+  .step .body p { margin: 5px 0 0; color: var(--muted); font-size: 14.5px; }
+  .step .body code { font-family: var(--mono); font-size: 13px; background: var(--surface-2); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+
+  /* ---------- under the hood ---------- */
+  .chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+  .chip-i { display: inline-flex; align-items: center; gap: 8px; padding: 9px 15px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); font-size: 14px; box-shadow: var(--shadow); }
+  .chip-i .d { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+
+  /* ---------- footer ---------- */
+  footer { border-top: 1px solid var(--line); padding: 46px 0 60px; }
+  .foot-grid { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 24px; align-items: end; }
+  .foot-grid .stack { font-family: var(--mono); font-size: 13px; color: var(--muted); max-width: 46ch; line-height: 1.9; }
+  .foot-cta { display: flex; gap: 12px; }
+  .signoff { margin-top: 34px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 860px) {
+    .hero-grid, .war { grid-template-columns: 1fr; gap: 34px; }
+    .pillars { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 520px) {
+    .metrics { grid-template-columns: 1fr; }
+    .top-links { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bar { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-row">
+    <div class="brand"><span class="mark">Kr</span> Kassa</div>
+    <nav class="top-links">
+      <a href="https://github.com/Ayuubmahad/kassa">Source</a>
+      <a href="#proof">Proof</a>
+      <a href="#flow">Architecture</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-grid">
+      <div>
+        <p class="eyebrow">Payments core · TypeScript · PostgreSQL</p>
+        <h1>Money that <span class="thin">provably</span> balances — under concurrent load.</h1>
+        <p class="lead">Kassa is a marketplace payments backend built on an append-only double-entry ledger. Every charge and refund posts two sides that must cancel; idempotent APIs make a retried checkout charge exactly once; and the correctness is <em>proven</em> with load tests, not promised.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/Ayuubmahad/kassa">View the source →</a>
+          <a class="btn btn-ghost" href="#proof">See the proof</a>
+        </div>
+      </div>
+
+      <div class="ledger" aria-label="A balanced ledger transaction: debit cash equals credit merchant payable.">
+        <div class="ledger-head">
+          <span class="t">Ledger · checkout</span>
+          <span class="ref">#order:1042</span>
+        </div>
+        <div class="cols">
+          <div>
+            <div class="col-label"><span>DEBIT</span><span>cash</span></div>
+            <div class="bar-track"><div class="bar debit" id="barD"><div class="bar-val">15000</div></div></div>
+          </div>
+          <div>
+            <div class="col-label"><span>CREDIT</span><span>merchant</span></div>
+            <div class="bar-track"><div class="bar credit" id="barC"><div class="bar-val">15000</div></div></div>
+          </div>
+        </div>
+        <div class="invariant">
+          <span>Σ debits</span><span class="ok">=</span><span>Σ credits</span>
+          <span class="chip">drift 0</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PILLARS -->
+  <section>
+    <div class="pillars">
+      <div class="pillar">
+        <div class="n">01 · integrity</div>
+        <h3>Double-entry ledger</h3>
+        <p>Append-only entries, enforced by a DB trigger. Balances are derived from raw rows, never stored — so drift can't hide.</p>
+      </div>
+      <div class="pillar">
+        <div class="n">02 · safety</div>
+        <h3>Idempotent by key</h3>
+        <p>Every mutating call carries an <span class="mono">Idempotency-Key</span>. Concurrent retries serialize on a unique constraint — exactly one charge.</p>
+      </div>
+      <div class="pillar">
+        <div class="n">03 · concurrency</div>
+        <h3>Correct under load</h3>
+        <p>Row-level <span class="mono">FOR UPDATE</span> locks, consistent lock ordering, and deadlock retry — validated with real HTTP traffic.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROOF / METRICS -->
+  <section id="proof">
+    <div class="sec-head">
+      <p class="eyebrow">The proof</p>
+      <h2>Numbers from k6 over real HTTP — not a notebook.</h2>
+      <p>Measured against Postgres 16 in Docker on an i7-10810U. An independent checker re-sums the entire ledger after every scenario and reports <span class="mono">ok</span>.</p>
+    </div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="fig">0</div>
+        <div class="k"><b>balance drift</b> across every load run — Σdebits = Σcredits, always</div>
+      </div>
+      <div class="metric">
+        <div class="fig">27<span class="u">ms</span></div>
+        <div class="k"><b>p95 latency</b> at ~200 req/s sustained, 0.00% errors</div>
+      </div>
+      <div class="metric">
+        <div class="fig">100<span class="u">/100</span></div>
+        <div class="k"><b>no oversell</b> — 200 buyers race for stock of 100</div>
+      </div>
+      <div class="metric">
+        <div class="fig">1<span class="u">×</span></div>
+        <div class="k"><b>exactly one charge</b> from 100 concurrent same-key requests</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- WAR STORY -->
+  <section>
+    <div class="war">
+      <div>
+        <p class="eyebrow">Where it failed — and what I learned</p>
+        <h2 style="font-size:clamp(24px,3.2vw,32px)">The 5-second p95.</h2>
+        <p class="lead" style="font-size:17px">My first throughput run clocked <b>p95 = 5.16 s</b> with ~2,500 dropped requests. Every checkout was buying the <em>same</em> SKU, so every transaction locked the <em>same</em> inventory row and serialized on it — the benchmark had accidentally recreated single-row contention.</p>
+        <p class="lead" style="font-size:17px">Real traffic spreads across products. I seeded a 500-SKU catalog and randomised the buys: p95 fell to <b>26.88 ms</b>. A throughput test has to model realistic key distribution, or it just measures your worst lock.</p>
+      </div>
+      <div class="beforeafter">
+        <div class="ba-row">
+          <span class="ba-tag">before</span>
+          <div>
+            <div class="ba-num bad">5.16 s</div>
+            <div class="ba-meter"><i style="width:100%;background:var(--amber)"></i></div>
+          </div>
+        </div>
+        <div class="ba-row">
+          <span class="ba-tag">after</span>
+          <div>
+            <div class="ba-num good">26.88 ms</div>
+            <div class="ba-meter"><i style="width:3%;background:var(--accent)"></i></div>
+          </div>
+        </div>
+        <div class="delta">a <b>~190× improvement</b> — same code, one diagnosis</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FLOW -->
+  <section id="flow">
+    <div class="sec-head">
+      <p class="eyebrow">Architecture</p>
+      <h2>One checkout, one transaction.</h2>
+      <p>From the lock to the commit, everything runs inside a single database transaction — it either fully succeeds or leaves no trace.</p>
+    </div>
+    <div class="flow">
+      <div class="step">
+        <div class="rail"><div class="dot">1</div><div class="line"></div></div>
+        <div class="body"><h3>Rate limit + validate</h3><p>Per-IP throttle, then full JSON-schema validation of the request body.</p></div>
+      </div>
+      <div class="step key">
+        <div class="rail"><div class="dot">2</div><div class="line"></div></div>
+        <div class="body"><h3>Idempotency gate</h3><p><code>INSERT … ON CONFLICT DO NOTHING</code> — a duplicate key blocks, then replays the stored response. The work runs once.</p></div>
+      </div>
+      <div class="step">
+        <div class="rail"><div class="dot">3</div><div class="line"></div></div>
+        <div class="body"><h3>Lock inventory</h3><p><code>SELECT … FOR UPDATE</code> ordered by SKU — serializes buyers, prevents deadlocks and overselling.</p></div>
+      </div>
+      <div class="step key">
+        <div class="rail"><div class="dot">4</div><div class="line"></div></div>
+        <div class="body"><h3>Post to the ledger</h3><p>One balanced posting — <code>debit cash</code> / <code>credit merchant_payable</code> — rejected before any write if it doesn't balance.</p></div>
+      </div>
+      <div class="step">
+        <div class="rail"><div class="dot">5</div><div class="line"></div></div>
+        <div class="body"><h3>Record + commit</h3><p>Insert the order &amp; payment, store the idempotent response, <code>COMMIT</code>. Any error rolls the whole thing back.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- UNDER THE HOOD -->
+  <section>
+    <div class="sec-head" style="margin-bottom:24px">
+      <p class="eyebrow">Engineering standard</p>
+      <h2>Built like production, not a demo.</h2>
+    </div>
+    <div class="chips">
+      <span class="chip-i"><span class="d"></span>47 tests, green CI</span>
+      <span class="chip-i"><span class="d"></span>docker compose up</span>
+      <span class="chip-i"><span class="d"></span>OpenAPI docs at /docs</span>
+      <span class="chip-i"><span class="d"></span>Structured logs + request IDs</span>
+      <span class="chip-i"><span class="d"></span>Nightly invariant audit</span>
+      <span class="chip-i"><span class="d"></span>Refund-to-payment matching</span>
+      <span class="chip-i"><span class="d"></span>Deadlock retry + 503 backpressure</span>
+      <span class="chip-i"><span class="d"></span>Non-root container</span>
+    </div>
+  </section>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <p class="eyebrow">Kassa</p>
+        <p class="stack">TypeScript · Node 22 · Fastify 5 · PostgreSQL 16 · Vitest · k6 · GitHub Actions · Docker</p>
+      </div>
+      <div class="foot-cta">
+        <a class="btn btn-primary" href="https://github.com/Ayuubmahad/kassa">GitHub →</a>
+        <a class="btn btn-ghost" href="https://github.com/Ayuubmahad/kassa/blob/main/docs/LOAD-TESTING.md">Load-test writeup</a>
+      </div>
+    </div>
+    <p class="signoff">A solo project by Ayuub — payments infrastructure, built to be defended line by line.</p>
+  </div>
+</footer>
+
+<script>
+  // Hero: settle the two ledger bars to equal height (the invariant, made visible).
+  (function () {
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var d = document.getElementById("barD"), c = document.getElementById("barC");
+    var target = "78%";
+    if (reduce) { d.style.transition = "none"; c.style.transition = "none"; d.style.height = target; c.style.height = target; return; }
+    requestAnimationFrame(function () {
+      setTimeout(function () { d.style.height = target; c.style.height = target; }, 180);
+    });
+  })();
+</script>
+</body>
+</html>
