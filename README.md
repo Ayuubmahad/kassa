@@ -14,16 +14,49 @@ The product surface is deliberately small. The engineering underneath is the poi
 
 ## Architecture
 
-_(diagram — Week 6)_
+The checkout path — everything from the lock to the commit is one DB transaction that
+either fully succeeds or leaves no trace:
 
-Core building blocks shipped so far:
+```mermaid
+flowchart TD
+  C[Client] -->|POST /checkout + Idempotency-Key| RL[Rate limiter]
+  RL --> V[JSON-schema validation]
+  V --> I{Idempotency key seen?}
+  I -->|yes| R[Replay stored response 201]
+  I -->|no: leader| TX[BEGIN]
+  TX --> L["Lock inventory rows<br/>SELECT ... FOR UPDATE (ORDER BY sku)"]
+  L --> CK{Valid currency?<br/>enough stock?}
+  CK -->|no| RB[ROLLBACK → 422]
+  CK -->|yes| PE["postEntries<br/>debit cash / credit merchant_payable"]
+  PE --> PAY[Insert order + payment]
+  PAY --> ST[Store idempotency response]
+  ST --> CM[COMMIT → 201]
+```
+
+The ledger is the source of truth; account balances are **derived** from raw entries, and an
+independent audit re-sums them to prove `Σdebits = Σcredits` (drift = 0).
+
+Core building blocks:
 
 | Piece | File |
 | --- | --- |
-| Double-entry schema (8 tables, constraints do the work) | [`db/schema.sql`](db/schema.sql) |
+| Double-entry schema + append-only triggers + constraints | [`db/schema.sql`](db/schema.sql) |
 | The one balanced-posting function all money flows through | [`src/ledger/postEntries.ts`](src/ledger/postEntries.ts) |
-| Single-client transaction helper (the node-postgres way) | [`src/db/pool.ts`](src/db/pool.ts) |
-| The ledger-invariant test (project's first test) | [`test/ledger-invariant.test.ts`](test/ledger-invariant.test.ts) |
+| Checkout (lock → ledger → payment, atomic) | [`src/checkout/checkout.ts`](src/checkout/checkout.ts) |
+| Idempotency (exactly-once via `ON CONFLICT` locking) | [`src/idempotency/idempotency.ts`](src/idempotency/idempotency.ts) |
+| Transaction helper + deadlock retry | [`src/db/pool.ts`](src/db/pool.ts) |
+| Independent drift / reconciliation checker | [`src/audit/drift.ts`](src/audit/drift.ts) |
+
+### Endpoints (interactive docs at `/docs`)
+
+| Method & path | Purpose |
+| --- | --- |
+| `POST /checkout` | Reserve stock, post ledger, record payment (idempotent) |
+| `POST /payments/:id/refunds` | Full/partial refund with reversal entries (idempotent) |
+| `GET /orders/:id` · `GET /payments/:id` | Read an order / payment + refund summary |
+| `GET /ledger/accounts` · `GET /ledger/transactions` | Derived balances / recent postings |
+| `GET /audit/drift` · `GET /audit/status` | Live invariant + reconciliation report |
+| `GET /docs` · `GET /health` · `GET /ready` | OpenAPI UI · liveness · readiness |
 
 ## Headline metrics (measured — see [docs/LOAD-TESTING.md](docs/LOAD-TESTING.md))
 
@@ -65,7 +98,7 @@ docker compose up --build
 ```
 
 Brings up Postgres + the app, applies the schema, and serves on `http://localhost:3000`.
-Health check: `GET /health` · Readiness (checks DB): `GET /ready`.
+Interactive API docs: `http://localhost:3000/docs` · Health: `GET /health` · Readiness: `GET /ready`.
 
 ### Local dev
 
@@ -78,10 +111,18 @@ npm run dev               # hot-reload server
 npm test                  # run the test suite (needs the DB up)
 ```
 
+### Audit the ledger anytime
+
+```bash
+npm run audit:drift     # re-sum the whole ledger; non-zero exit on any drift
+npm run audit:refunds   # verify every refund matches a payment
+```
+
 ## Tech stack
 
-TypeScript · Node 22 · Fastify 5 · PostgreSQL 16 · Vitest · k6 (load tests, Week 4) · GitHub Actions CI
+TypeScript · Node 22 · Fastify 5 (+ swagger, rate-limit) · PostgreSQL 16 · Vitest · k6 · GitHub Actions CI
 
 ## Status
 
-Week 1 — setup, schema, and the ledger invariant. See [`../projects roadmaps/kassa-roadmap.md`](../projects%20roadmaps/kassa-roadmap.md) for the full plan.
+Weeks 1–6 complete: double-entry ledger, checkout, idempotency, refunds, concurrency-proven
+under k6 load (0 drift, p95 27ms), audit jobs, OpenAPI docs, rate limiting. **47 tests, CI green.**
