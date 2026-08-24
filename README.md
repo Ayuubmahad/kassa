@@ -1,5 +1,7 @@
 # Kassa
 
+[![CI](https://github.com/Ayuubmahad/kassa/actions/workflows/ci.yml/badge.svg)](https://github.com/Ayuubmahad/kassa/actions/workflows/ci.yml)
+
 > Transaction-safe payments core for a marketplace: a **double-entry ledger** where debits always equal credits, **idempotent APIs** where retrying a checkout charges you once, and **provable correctness under concurrent load**.
 
 The product surface is deliberately small. The engineering underneath is the point.
