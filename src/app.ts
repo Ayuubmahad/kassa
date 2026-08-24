@@ -1,4 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import rateLimit from "@fastify/rate-limit";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { config } from "./config.js";
 import { pool } from "./db/pool.js";
 import { checkoutRoutes } from "./checkout/routes.js";
@@ -17,6 +20,33 @@ export function buildApp(): FastifyInstance {
       (req.headers["x-request-id"] as string | undefined) ??
       globalThis.crypto.randomUUID(),
   });
+
+  // Public-demo hardening: cap requests per IP. Generous in tests so the suites
+  // (which fire many app.inject calls) aren't throttled.
+  void app.register(rateLimit, {
+    max: config.NODE_ENV === "test" ? 100_000 : config.RATE_LIMIT_MAX,
+    timeWindow: config.RATE_LIMIT_WINDOW_MS,
+  });
+
+  // OpenAPI: @fastify/swagger must load before the routes so its onRoute hook can
+  // collect their JSON schemas; swagger-ui then serves the spec at /docs.
+  void app.register(swagger, {
+    openapi: {
+      info: {
+        title: "Kassa API",
+        description:
+          "Transaction-safe payments core: double-entry ledger, idempotent checkout & refunds.",
+        version: "0.1.0",
+      },
+      tags: [
+        { name: "checkout" },
+        { name: "refunds" },
+        { name: "ledger" },
+        { name: "audit" },
+      ],
+    },
+  });
+  void app.register(swaggerUi, { routePrefix: "/docs" });
 
   app.get("/health", async () => ({ status: "ok" }));
 

@@ -18,6 +18,9 @@ const EnvSchema = z.object({
   // Kassa is single-currency by design. Requests in any other currency are
   // rejected so foreign-currency legs can never enter the (base-currency) accounts.
   BASE_CURRENCY: z.string().length(3).default("SEK"),
+  // Rate limiting for the public demo (per IP).
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
 });
 
 const parsed = EnvSchema.safeParse(process.env);
